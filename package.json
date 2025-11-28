@@ -1,0 +1,22 @@
+{
+  "name": "bazaar-mtuci",
+  "version": "1.0.0",
+  "description": "Сервис аренды вещей для общежития МТУСИ",
+  "scripts": {
+    "start": "./start.sh",
+    "install:all": "cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && cd ../frontend && npm install",
+    "dev": "./start.sh"
+  },
+  "keywords": [
+    "rental",
+    "marketplace",
+    "dormitory"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
+
+
+
+
