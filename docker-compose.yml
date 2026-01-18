@@ -47,7 +47,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://0.0.0.0:3000,http://127.0.0.1:3000
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_REGION: us-east-1
@@ -62,6 +62,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - /home/gera/clip:/app/models/clip:ro
     command: >
       sh -c "
         python init_minio.py &&
