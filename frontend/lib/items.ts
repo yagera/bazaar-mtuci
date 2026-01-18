@@ -17,16 +17,38 @@ export enum ModerationStatus {
   REJECTED = 'rejected',
 }
 
+export enum ItemCategory {
+  ELECTRONICS = 'electronics',
+  CLOTHING = 'clothing',
+  FURNITURE = 'furniture',
+  BOOKS = 'books',
+  SPORTS = 'sports',
+  KITCHEN = 'kitchen',
+  TOOLS = 'tools',
+  GAMES = 'games',
+  COSMETICS = 'cosmetics',
+  OTHER = 'other',
+}
+
+export enum ItemType {
+  RENT = 'rent',
+  SALE = 'sale',
+}
+
 export interface Item {
   id: number
   title: string
   description: string | null
-  price_per_hour: string
+  item_type: ItemType
+  price_per_hour: string | null
   price_per_day: string | null
+  sale_price: string | null
   image_url: string | null
   owner_id: number
   dormitory: number | null
+  category: ItemCategory
   is_active: boolean
+  view_count: number
   moderation_status: ModerationStatus
   moderation_comment: string | null
   moderated_by_id: number | null
@@ -44,12 +66,21 @@ export interface Item {
   availabilities: Availability[]
 }
 
+export interface ItemStats {
+  view_count: number
+  favorites_count: number
+  is_favorite: boolean
+}
+
 export interface ItemCreate {
   title: string
   description?: string
-  price_per_hour: number
+  item_type: ItemType
+  price_per_hour?: number
   price_per_day?: number
+  sale_price?: number
   image_url?: string
+  category?: ItemCategory
   availabilities?: {
     date?: string | null  // Дата в формате YYYY-MM-DD (для обратной совместимости)
     start_date: string  // Начало диапазона дат в формате YYYY-MM-DD
@@ -62,9 +93,12 @@ export interface ItemCreate {
 export interface ItemUpdate {
   title?: string
   description?: string
+  item_type?: ItemType
   price_per_hour?: number
   price_per_day?: number
+  sale_price?: number
   image_url?: string
+  category?: ItemCategory
   is_active?: boolean
   availabilities?: {
     date?: string | null  // Дата в формате YYYY-MM-DD (для обратной совместимости)
@@ -76,10 +110,12 @@ export interface ItemUpdate {
 }
 
 export const itemsApi = {
-  getAll: async (search?: string, dormitory?: number, minPrice?: number, maxPrice?: number): Promise<Item[]> => {
+  getAll: async (search?: string, dormitory?: number, category?: ItemCategory, itemType?: ItemType, minPrice?: number, maxPrice?: number): Promise<Item[]> => {
     const params: any = {}
     if (search) params.search = search
     if (dormitory) params.dormitory = dormitory
+    if (category) params.category = category
+    if (itemType) params.item_type = itemType
     if (minPrice !== undefined) params.min_price = minPrice
     if (maxPrice !== undefined) params.max_price = maxPrice
     const response = await api.get('/items', { params })

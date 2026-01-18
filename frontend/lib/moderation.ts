@@ -28,6 +28,80 @@ export const moderationApi = {
     const response = await api.get('/moderation/stats')
     return response.data
   },
+
+  getDetailedStats: async (): Promise<ModerationDetailedStats> => {
+    const response = await api.get('/moderation/stats/detailed')
+    return response.data
+  },
 }
+
+export interface ModerationDetailedStats {
+  items: {
+    total: number
+    pending: number
+    approved: number
+    rejected: number
+    periods: {
+      approved: {
+        today: number
+        week: number
+        month: number
+      }
+      rejected: {
+        today: number
+        week: number
+        month: number
+      }
+    }
+  }
+  reports: {
+    total: number
+    pending: number
+    resolved: number
+    dismissed: number
+    periods: {
+      resolved: {
+        today: number
+        week: number
+        month: number
+      }
+      dismissed: {
+        today: number
+        week: number
+        month: number
+      }
+    }
+  }
+  moderator: {
+    items: {
+      approved: number
+      rejected: number
+      today: number
+      week: number
+    }
+    reports: {
+      resolved: number
+      dismissed: number
+      today: number
+      week: number
+    }
+  }
+  admin?: {
+    users: {
+      total: number
+      active: number
+    }
+    bookings: {
+      total: number
+      confirmed: number
+    }
+    items: {
+      active: number
+    }
+  }
+}
+
+
+
 
 

@@ -10,8 +10,8 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Базар МТУСИ - Аренда вещей в общежитии',
-  description: 'Сервис аренды вещей для жителей общежития МТУСИ',
+  title: 'Базар МТУСИ - Аренда и продажа вещей для общежития',
+  description: 'Сервис аренды и продажи вещей для жителей общежития МТУСИ',
 }
 
 export default function RootLayout({

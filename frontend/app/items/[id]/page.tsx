@@ -1,15 +1,19 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Calendar, Clock, MapPin, User, MessageCircle, X } from 'lucide-react'
+import { Calendar, Clock, MapPin, User, MessageCircle, X, Flag, Eye } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { itemsApi, Item } from '@/lib/items'
+import FavoriteButton from '@/components/FavoriteButton'
+import { itemsApi, Item, ItemType } from '@/lib/items'
+import { getCategoryInfo } from '@/lib/categories'
 import { bookingsApi, Booking } from '@/lib/bookings'
 import { authApi } from '@/lib/auth'
 import { reportsApi, ReportReason } from '@/lib/reports'
+import { favoritesApi } from '@/lib/favorites'
 import TimeInput from '@/components/TimeInput'
 import { format } from 'date-fns'
 import { ru } from 'date-fns/locale'
@@ -28,15 +32,19 @@ export default function ItemDetailPage() {
   const [reportDescription, setReportDescription] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<any>(null)
 
-  const { data: item, isLoading } = useQuery({
+  const { data: item, isLoading, error: itemError } = useQuery({
     queryKey: ['item', itemId],
     queryFn: () => itemsApi.getById(itemId),
+    enabled: !!itemId && !isNaN(itemId),
+    refetchInterval: 30000, // Обновление каждые 30 секунд
+    retry: 2,
   })
 
   const { data: bookings = [] } = useQuery({
     queryKey: ['bookings', itemId],
     queryFn: () => bookingsApi.getForItem(itemId),
     enabled: !!itemId,
+    refetchInterval: 30000, // Обновление каждые 30 секунд
   })
 
   useEffect(() => {
@@ -73,6 +81,19 @@ export default function ItemDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['items'] })
       queryClient.invalidateQueries({ queryKey: ['my-items'] })
       alert('Объявление снято с публикации')
+    },
+  })
+
+  const activateMutation = useMutation({
+    mutationFn: () => itemsApi.update(itemId, { is_active: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] })
+      queryClient.invalidateQueries({ queryKey: ['items'] })
+      queryClient.invalidateQueries({ queryKey: ['my-items'] })
+      const message = item?.moderation_status === 'rejected' 
+        ? 'Объявление восстановлено и отправлено на модерацию' 
+        : 'Объявление восстановлено'
+      alert(message)
     },
   })
 
@@ -119,7 +140,11 @@ export default function ItemDetailPage() {
     const selectedStart = startDateTime.getTime()
     const selectedEnd = endDateTime.getTime()
     
+    // Проверяем пересечения только с активными бронированиями (pending и confirmed)
     const hasOverlap = bookings.some(booking => {
+      if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+        return false
+      }
       const bookingStart = new Date(booking.start_time).getTime()
       const bookingEnd = new Date(booking.end_time).getTime()
       return selectedStart < bookingEnd && selectedEnd > bookingStart
@@ -140,6 +165,15 @@ export default function ItemDetailPage() {
   const handleDeactivate = () => {
     if (confirm('Вы уверены, что хотите снять объявление с публикации?')) {
       deactivateMutation.mutate()
+    }
+  }
+
+  const handleActivate = () => {
+    const message = item?.moderation_status === 'rejected'
+      ? 'Объявление будет восстановлено и отправлено на повторную модерацию. Продолжить?'
+      : 'Вы уверены, что хотите восстановить объявление?'
+    if (confirm(message)) {
+      activateMutation.mutate()
     }
   }
 
@@ -171,12 +205,44 @@ export default function ItemDetailPage() {
     )
   }
 
+  if (itemError) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-[#212330]">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="card text-center py-12">
+            <p className="text-red-600 dark:text-red-400 mb-4">
+              Ошибка при загрузке объявления
+            </p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              {itemError instanceof Error ? itemError.message : 'Неизвестная ошибка'}
+            </p>
+            <button
+              onClick={() => router.back()}
+              className="btn-primary"
+            >
+              Вернуться назад
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!item) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#212330]">
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <p className="text-gray-900 dark:text-gray-100">Объявление не найдено</p>
+          <div className="card text-center py-12">
+            <p className="text-gray-900 dark:text-gray-100 mb-4">Объявление не найдено</p>
+            <button
+              onClick={() => router.back()}
+              className="btn-primary"
+            >
+              Вернуться назад
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -199,7 +265,11 @@ export default function ItemDetailPage() {
 
   const getBookedSlotsForDateRange = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return []
+    // Показываем только активные бронирования (pending и confirmed)
     return bookings.filter(booking => {
+      if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+        return false
+      }
       const bookingStart = new Date(booking.start_time).toISOString().split('T')[0]
       const bookingEnd = new Date(booking.end_time).toISOString().split('T')[0]
       return bookingStart <= endDate && bookingEnd >= startDate
@@ -219,30 +289,57 @@ export default function ItemDetailPage() {
         >
           <div>
             <div className="card mb-6">
-              <div className="relative w-full aspect-square max-h-[500px] bg-white dark:bg-gray-800 rounded-lg overflow-hidden mb-6 flex items-center justify-center border border-gray-100 dark:border-gray-700">
+              <div className="relative w-full rounded-lg overflow-hidden mb-6 bg-gray-100 dark:bg-gray-800 flex items-center justify-center min-h-[300px]">
                 {item.image_url ? (
                   <img
                     src={item.image_url}
                     alt={item.title}
-                    className="w-full h-full object-contain item-image"
+                    className="w-full h-auto max-h-[600px] object-contain"
                     loading="eager"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                  <div className="w-full min-h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
                     Нет фото
                   </div>
                 )}
               </div>
               
-              {item.dormitory && (
-                <div className="mb-4">
-                  <span className="inline-block px-3 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 rounded-full text-sm font-medium">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {(() => {
+                  const categoryInfo = getCategoryInfo(item.category)
+                  const CategoryIcon = categoryInfo.icon
+                  return (
+                    <Link
+                      href={`/?category=${item.category}`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all duration-200 hover:scale-105 hover:shadow-md ${categoryInfo.bgColor} ${categoryInfo.color.replace('text-', 'border-')} ${categoryInfo.color} cursor-pointer group`}
+                      title={`Показать все объявления категории: ${categoryInfo.label}`}
+                    >
+                      <CategoryIcon className="h-4 w-4 transition-transform group-hover:scale-110" />
+                      {categoryInfo.label}
+                    </Link>
+                  )
+                })()}
+                {item.dormitory && (
+                  <span className="inline-block px-3 py-1.5 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 rounded-full text-sm font-medium">
                     Общежитие №{item.dormitory}
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
-              <h1 className="text-4xl font-bold mb-4 gradient-text dark:text-primary-400">{item.title}</h1>
+              <div className="flex items-start justify-between mb-4">
+                <h1 className="text-4xl font-bold gradient-text dark:text-primary-400 flex-1">{item.title}</h1>
+                <div className="ml-4" onClick={(e) => e.stopPropagation()}>
+                  <FavoriteButton itemId={itemId} ownerId={item?.owner_id} size="lg" showCount />
+                </div>
+              </div>
+              
+              {/* Статистика */}
+              <div className="flex items-center gap-6 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <Eye className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium">{item.view_count || 0} просмотров</span>
+                </div>
+              </div>
               
               {item.description && (
                 <p className="text-gray-600 dark:text-gray-300 mb-6 whitespace-pre-line">{item.description}</p>
@@ -279,13 +376,23 @@ export default function ItemDetailPage() {
 
               {isOwner && (
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                  <button
-                    onClick={handleDeactivate}
-                    disabled={deactivateMutation.isPending || !item.is_active}
-                    className="btn-secondary w-full"
-                  >
-                    {deactivateMutation.isPending ? 'Снятие...' : 'Снять объявление'}
-                  </button>
+                  {item.is_active ? (
+                    <button
+                      onClick={handleDeactivate}
+                      disabled={deactivateMutation.isPending}
+                      className="btn-secondary w-full"
+                    >
+                      {deactivateMutation.isPending ? 'Снятие...' : 'Снять объявление'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleActivate}
+                      disabled={activateMutation.isPending}
+                      className="btn-primary w-full"
+                    >
+                      {activateMutation.isPending ? 'Восстановление...' : 'Восстановить объявление'}
+                    </button>
+                  )}
                   <button
                     onClick={handleDelete}
                     disabled={deleteMutation.isPending}
@@ -303,7 +410,9 @@ export default function ItemDetailPage() {
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Цена</h2>
                 <div className="text-5xl font-bold gradient-text mb-2">
-                  {parseFloat(item.price_per_hour).toFixed(0)} ₽/час
+                  {item.item_type === ItemType.SALE 
+                    ? `${item.sale_price ? parseFloat(item.sale_price).toFixed(0) : '0'} ₽`
+                    : `${item.price_per_hour ? parseFloat(item.price_per_hour).toFixed(0) : '0'} ₽/час`}
                 </div>
                 {item.price_per_day && (
                   <div className="text-lg text-gray-600 dark:text-gray-400">
@@ -370,23 +479,45 @@ export default function ItemDetailPage() {
               {!isOwner && item.is_active && (
                 <>
                   <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={() => setShowBookingForm(!showBookingForm)}
-                      className="btn-primary flex-1"
-                    >
-                      <Calendar className="h-5 w-5 inline mr-2" />
-                      Забронировать
-                    </button>
+                    {item.item_type === ItemType.RENT && (
+                      <button
+                        onClick={() => setShowBookingForm(!showBookingForm)}
+                        className="btn-primary flex-1"
+                      >
+                        <Calendar className="h-5 w-5 inline mr-2" />
+                        Забронировать
+                      </button>
+                    )}
+                    {item.item_type === ItemType.SALE && (
+                      <button
+                        onClick={() => {
+                          const message = `Привет! Интересует товар "${item.title}". Можно обсудить детали?`
+                          const telegram = item.owner.telegram_username 
+                            ? `https://t.me/${item.owner.telegram_username.replace('@', '')}?text=${encodeURIComponent(message)}`
+                            : null
+                          if (telegram) {
+                            window.open(telegram, '_blank')
+                          } else {
+                            alert('Telegram не указан. Свяжитесь с владельцем другим способом.')
+                          }
+                        }}
+                        className="btn-primary flex-1"
+                      >
+                        <MessageCircle className="h-5 w-5 inline mr-2" />
+                        Связаться с продавцом
+                      </button>
+                    )}
                     <button
                       onClick={() => setShowReportForm(!showReportForm)}
-                      className="btn-secondary"
+                      className="btn-secondary flex items-center justify-center space-x-2"
                       title="Пожаловаться на объявление"
                     >
-                      <X className="h-5 w-5" />
+                      <Flag className="h-5 w-5" />
+                      <span>Пожаловаться</span>
                     </button>
                   </div>
 
-                  {showBookingForm && (
+                  {showBookingForm && item.item_type === ItemType.RENT && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -551,24 +682,26 @@ export default function ItemDetailPage() {
                 </>
               )}
 
-              {isOwner && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    Это ваше объявление. Вы не можете его забронировать.
-                  </p>
-                </div>
-              )}
+              <div className="space-y-3">
+                {isOwner && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      Это ваше объявление. Вы не можете его забронировать.
+                    </p>
+                  </div>
+                )}
 
-              {item.moderation_status === 'pending' && (
-                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Объявление находится на модерации и будет опубликовано после проверки.
-                  </p>
-                </div>
-              )}
+                {item.moderation_status === 'pending' && (
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Объявление находится на модерации и будет опубликовано после проверки.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {item.moderation_status === 'rejected' && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 mt-3">
                   <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-1">
                     Объявление отклонено модератором
                   </p>

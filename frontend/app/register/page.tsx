@@ -45,16 +45,16 @@ export default function RegisterPage() {
     if (/\d/.test(pwd)) strength++
     if (/[^a-zA-Z\d]/.test(pwd)) strength++
     
-    if (strength <= 2) return { strength, label: 'Слабый', color: 'bg-red-500' }
-    if (strength <= 3) return { strength, label: 'Средний', color: 'bg-yellow-500' }
-    return { strength, label: 'Сильный', color: 'bg-green-500' }
+    if (strength <= 2) return { strength, label: t('register.passwordWeak'), color: 'bg-red-500' }
+    if (strength <= 3) return { strength, label: t('register.passwordMedium'), color: 'bg-yellow-500' }
+    return { strength, label: t('register.passwordStrong'), color: 'bg-green-500' }
   }
 
   const passwordStrength = getPasswordStrength(password || '')
 
   const onSubmit = async (data: RegisterForm) => {
     if (data.password !== data.confirmPassword) {
-      setError('Пароли не совпадают')
+      setError(t('register.passwordMismatch'))
       return
     }
 
@@ -67,6 +67,11 @@ export default function RegisterPage() {
       }
       if (registerData.telegram_username && !registerData.telegram_username.trim()) {
         delete registerData.telegram_username
+      }
+      if (registerData.dormitory === undefined || registerData.dormitory === null || registerData.dormitory === '') {
+        setError(t('register.selectDormitory'))
+        setIsLoading(false)
+        return
       }
       
       await authApi.register(registerData)
@@ -197,19 +202,19 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Номер комнаты
+                  {t('register.roomNumber')}
                 </label>
                 <input
                   type="text"
                   {...register('room_number')}
                   className="input-field"
-                  placeholder="Например: 101"
+                  placeholder={t('register.roomNumberPlaceholder')}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telegram username
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('register.telegramUsername')}
                 </label>
                 <input
                   type="text"
@@ -220,22 +225,22 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Пароль *
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('register.password')} *
                 </label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
                     {...register('password', { 
-                      required: 'Обязательное поле', 
-                      minLength: { value: 6, message: 'Минимум 6 символов' },
+                      required: t('profile.requiredField'), 
+                      minLength: { value: 6, message: t('register.passwordMinLength') },
                       validate: (value) => {
-                        if (value.length < 6) return 'Минимум 6 символов'
+                        if (value.length < 6) return t('register.passwordMinLength')
                         return true
                       }
                     })}
                     className={`input-field pr-10 ${errors.password ? 'border-red-500' : password && !errors.password ? 'border-green-500' : ''}`}
-                    placeholder="Минимум 6 символов"
+                    placeholder={t('register.passwordPlaceholder')}
                   />
                   <button
                     type="button"
@@ -271,7 +276,7 @@ export default function RegisterPage() {
                         ) : (
                           <XCircle className="h-3 w-3 mr-1" />
                         )}
-                        Минимум 6 символов
+                        {t('register.passwordMinLength')}
                       </div>
                       <div className={`flex items-center ${password && password.length >= 8 ? 'text-green-600' : 'text-gray-400'}`}>
                         {password && password.length >= 8 ? (
@@ -279,7 +284,7 @@ export default function RegisterPage() {
                         ) : (
                           <XCircle className="h-3 w-3 mr-1" />
                         )}
-                        Рекомендуется 8+ символов
+                        {t('register.passwordRecommended') || 'Рекомендуется 8+ символов'}
                       </div>
                     </div>
                   </div>
@@ -290,22 +295,22 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Подтвердите пароль *
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('register.confirmPassword')} *
                 </label>
                 <div className="relative">
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
                     {...register('confirmPassword', {
-                      required: 'Обязательное поле',
+                      required: t('profile.requiredField'),
                       validate: (value) => {
-                        if (!value) return 'Обязательное поле'
-                        if (value !== password) return 'Пароли не совпадают'
+                        if (!value) return t('profile.requiredField')
+                        if (value !== password) return t('register.passwordMismatch')
                         return true
                       }
                     })}
                     className={`input-field pr-10 ${errors.confirmPassword ? 'border-red-500' : confirmPassword && confirmPassword === password && !errors.confirmPassword ? 'border-green-500' : ''}`}
-                    placeholder="Повторите пароль"
+                    placeholder={t('register.confirmPasswordPlaceholder')}
                   />
                   <button
                     type="button"
@@ -327,9 +332,9 @@ export default function RegisterPage() {
                   <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
                 )}
                 {confirmPassword && confirmPassword === password && !errors.confirmPassword && (
-                  <p className="mt-1 text-sm text-green-600 flex items-center">
+                  <p className="mt-1 text-sm text-green-600 dark:text-green-400 flex items-center">
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Пароли совпадают
+                    {t('register.passwordsMatch')}
                   </p>
                 )}
               </div>
@@ -339,14 +344,14 @@ export default function RegisterPage() {
                 disabled={isLoading}
                 className="btn-primary w-full"
               >
-                {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
+                {isLoading ? t('register.registering') : t('register.submit')}
               </button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-600">
-              Уже есть аккаунт?{' '}
-              <Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
-                Войти
+            <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+              {t('register.haveAccount')}{' '}
+              <Link href="/login" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-500 font-medium">
+                {t('register.login')}
               </Link>
             </p>
           </div>

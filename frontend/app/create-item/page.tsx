@@ -8,7 +8,9 @@ import { motion } from 'framer-motion'
 import { Plus, X, Upload, Image as ImageIcon } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import TimeInput from '@/components/TimeInput'
-import { itemsApi, ItemCreate } from '@/lib/items'
+import CategorySelect from '@/components/CategorySelect'
+import { itemsApi, ItemCreate, ItemCategory, ItemType } from '@/lib/items'
+import ItemTypeToggle from '@/components/ItemTypeToggle'
 import api from '@/lib/api'
 
 interface AvailabilityForm {
@@ -21,6 +23,8 @@ interface AvailabilityForm {
 
 interface ItemForm extends Omit<ItemCreate, 'availabilities'> {
   availabilities: AvailabilityForm[]
+  category: ItemCategory
+  item_type: ItemType
 }
 
 
@@ -43,8 +47,12 @@ export default function CreateItemPage() {
   const { register, handleSubmit, control, formState: { errors }, setValue, watch } = useForm<ItemForm>({
     defaultValues: {
       availabilities: [],
+      category: ItemCategory.OTHER,
+      item_type: ItemType.RENT,
     },
   })
+
+  const itemType = watch('item_type')
 
   const imageUrl = watch('image_url')
 
@@ -119,12 +127,15 @@ export default function CreateItemPage() {
     
     const itemData: ItemCreate = {
       ...data,
-      availabilities: data.availabilities.map(avail => ({
-        start_date: avail.start_date,
-        end_date: avail.end_date,
-        start_time: avail.start_time,
-        end_time: avail.end_time,
-      })),
+      // Для продажи availabilities не нужны
+      availabilities: data.item_type === ItemType.RENT 
+        ? data.availabilities.map(avail => ({
+            start_date: avail.start_date,
+            end_date: avail.end_date,
+            start_time: avail.start_time,
+            end_time: avail.end_time,
+          }))
+        : undefined,
     }
     
     mutation.mutate(itemData)
@@ -154,12 +165,12 @@ export default function CreateItemPage() {
                 placeholder="Например: Игровой ноутбук"
               />
               {errors.title && (
-                <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.title.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Описание
               </label>
               <textarea
@@ -170,47 +181,105 @@ export default function CreateItemPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Цена за час (₽) *
-                </label>
-                <input
-                  type="number"
-                  step="50"
-                  min="0"
-                  {...register('price_per_hour', {
-                    required: 'Обязательное поле',
-                    min: { value: 0, message: 'Минимум 0' },
-                  })}
-                  className="input-field"
+            <Controller
+              name="item_type"
+              control={control}
+              rules={{ required: 'Выберите тип объявления' }}
+              render={({ field, fieldState }) => (
+                <ItemTypeToggle
+                  value={field.value}
+                  onChange={(value) => {
+                    field.onChange(value)
+                    // Очищаем поля цены при смене типа
+                    if (value === ItemType.SALE) {
+                      setValue('price_per_hour', undefined)
+                      setValue('price_per_day', undefined)
+                    } else {
+                      setValue('sale_price', undefined)
+                    }
+                  }}
+                  error={fieldState.error?.message}
                 />
-                {errors.price_per_hour && (
-                  <p className="mt-1 text-sm text-red-600">{errors.price_per_hour.message}</p>
-                )}
-              </div>
+              )}
+            />
 
+            <Controller
+              name="category"
+              control={control}
+              rules={{ required: 'Выберите категорию' }}
+              render={({ field, fieldState }) => (
+                <CategorySelect
+                  value={field.value}
+                  onChange={(category) => {
+                    field.onChange(category)
+                  }}
+                  error={fieldState.error?.message}
+                />
+              )}
+            />
+
+            {itemType === ItemType.RENT ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Цена за час (₽) *
+                  </label>
+                  <input
+                    type="number"
+                    step="50"
+                    min="0"
+                    {...register('price_per_hour', {
+                      required: itemType === ItemType.RENT ? 'Обязательное поле' : false,
+                      min: { value: 0, message: 'Минимум 0' },
+                    })}
+                    className="input-field"
+                  />
+                  {errors.price_per_hour && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.price_per_hour.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Цена за день (₽)
+                  </label>
+                  <input
+                    type="number"
+                    step="50"
+                    min="0"
+                    {...register('price_per_day', {
+                      min: { value: 0, message: 'Минимум 0' },
+                    })}
+                    className="input-field"
+                  />
+                  {errors.price_per_day && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.price_per_day.message}</p>
+                  )}
+                </div>
+              </div>
+            ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Цена за день (₽)
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Цена (₽) *
                 </label>
                 <input
                   type="number"
                   step="50"
                   min="0"
-                  {...register('price_per_day', {
+                  {...register('sale_price', {
+                    required: itemType === ItemType.SALE ? 'Обязательное поле' : false,
                     min: { value: 0, message: 'Минимум 0' },
                   })}
                   className="input-field"
                 />
-                {errors.price_per_day && (
-                  <p className="mt-1 text-sm text-red-600">{errors.price_per_day.message}</p>
+                {errors.sale_price && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.sale_price.message}</p>
                 )}
               </div>
-            </div>
+            )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Изображение *
               </label>
               
@@ -230,17 +299,17 @@ export default function CreateItemPage() {
                     disabled={uploading}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full flex items-center justify-center space-x-2 px-6 py-4 border-2 border-dashed border-primary-300 rounded-xl hover:border-primary-500 transition-all disabled:opacity-50 bg-primary-50 hover:bg-primary-100"
+                    className="w-full flex items-center justify-center space-x-2 px-6 py-4 border-2 border-dashed border-primary-300 dark:border-primary-600 rounded-xl hover:border-primary-500 dark:hover:border-primary-400 transition-all disabled:opacity-50 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30"
                   >
                     {uploading ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-950"></div>
-                        <span className="text-primary-950 font-medium">Загрузка...</span>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-950 dark:border-primary-400"></div>
+                        <span className="text-primary-950 dark:text-primary-300 font-medium">Загрузка...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="h-6 w-6 text-primary-950" />
-                        <span className="text-primary-950 font-medium">Загрузить изображение</span>
+                        <Upload className="h-6 w-6 text-primary-950 dark:text-primary-400" />
+                        <span className="text-primary-950 dark:text-primary-300 font-medium">Загрузить изображение</span>
                       </>
                     )}
                   </motion.button>
@@ -267,11 +336,11 @@ export default function CreateItemPage() {
                             target.style.display = 'none'
                             if (!parent.querySelector('.image-error')) {
                               const errorDiv = document.createElement('div')
-                              errorDiv.className = 'image-error w-full h-[400px] flex items-center justify-center text-gray-500'
+                              errorDiv.className = 'image-error w-full h-[400px] flex items-center justify-center text-gray-500 dark:text-gray-400'
                               errorDiv.innerHTML = `
                                 <div class="text-center p-4">
-                                  <p class="text-sm font-medium mb-2 text-red-600">Ошибка загрузки изображения</p>
-                                  <p class="text-xs text-gray-400 break-all max-w-full">${(previewUrl || imageUrl || 'Нет URL').substring(0, 100)}</p>
+                                  <p class="text-sm font-medium mb-2 text-red-600 dark:text-red-400">Ошибка загрузки изображения</p>
+                                  <p class="text-xs text-gray-400 dark:text-gray-500 break-all max-w-full">${(previewUrl || imageUrl || 'Нет URL').substring(0, 100)}</p>
                                 </div>
                               `
                               parent.appendChild(errorDiv)
@@ -329,26 +398,27 @@ export default function CreateItemPage() {
                   </motion.div>
                 )}
                 
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Поддерживаются форматы: JPG, PNG, WebP, GIF. Максимальный размер: 5MB
                 </p>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Расписание доступности
-                </label>
-                <button
-                  type="button"
-                  onClick={() => append({ start_date: today, end_date: today, start_time: '09:00', end_time: '18:00' })}
-                  className="btn-secondary flex items-center space-x-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Добавить</span>
-                </button>
-              </div>
+            {itemType === ItemType.RENT && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Расписание доступности
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => append({ start_date: today, end_date: today, start_time: '09:00', end_time: '18:00' })}
+                    className="btn-secondary flex items-center space-x-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Добавить</span>
+                  </button>
+                </div>
 
               <div className="space-y-4">
                 {fields.map((field, index) => (
@@ -358,7 +428,7 @@ export default function CreateItemPage() {
                       <button
                         type="button"
                         onClick={() => remove(index)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                       >
                         <X className="h-5 w-5" />
                       </button>
@@ -378,7 +448,7 @@ export default function CreateItemPage() {
                           className="input-field"
                         />
                         {errors.availabilities?.[index]?.start_date && (
-                          <p className="mt-1 text-xs text-red-600">{errors.availabilities[index]?.start_date?.message}</p>
+                          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.availabilities[index]?.start_date?.message}</p>
                         )}
                       </div>
 
@@ -402,7 +472,7 @@ export default function CreateItemPage() {
                           className="input-field"
                         />
                         {errors.availabilities?.[index]?.end_date && (
-                          <p className="mt-1 text-xs text-red-600">{errors.availabilities[index]?.end_date?.message}</p>
+                          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.availabilities[index]?.end_date?.message}</p>
                         )}
                       </div>
 
@@ -439,7 +509,8 @@ export default function CreateItemPage() {
                   </div>
                 ))}
               </div>
-            </div>
+              </div>
+            )}
 
             <div className="flex space-x-4">
               <button

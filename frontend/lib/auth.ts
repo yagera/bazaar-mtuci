@@ -62,6 +62,43 @@ export const authApi = {
     const response = await api.get('/auth/me')
     return response.data
   },
+
+  getStats: async (): Promise<UserStats> => {
+    const response = await api.get('/users/me/stats')
+    return response.data
+  },
+}
+
+export interface UserStats {
+  items: {
+    total: number
+    active: number
+    inactive: number
+  }
+  views: {
+    total: number
+  }
+  favorites: {
+    total: number
+  }
+  bookings: {
+    as_owner: {
+      total: number
+      confirmed: number
+      completed: number
+    }
+    as_renter: {
+      total: number
+      confirmed: number
+      completed: number
+    }
+  }
+  sales: {
+    active_items: number
+  }
+  earnings: {
+    total: number
+  }
 }
 
 

@@ -8,7 +8,8 @@ import { motion } from 'framer-motion'
 import { Plus, X, Upload } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import TimeInput from '@/components/TimeInput'
-import { itemsApi, Item, ItemUpdate } from '@/lib/items'
+import CategorySelect from '@/components/CategorySelect'
+import { itemsApi, Item, ItemUpdate, ItemCategory } from '@/lib/items'
 import { authApi } from '@/lib/auth'
 import api from '@/lib/api'
 
@@ -20,6 +21,7 @@ interface AvailabilityForm {
 
 interface ItemForm extends Omit<ItemUpdate, 'availabilities'> {
   availabilities: AvailabilityForm[]
+  category: ItemCategory
 }
 
 export default function EditItemPage() {
@@ -77,6 +79,7 @@ export default function EditItemPage() {
         price_per_hour: parseFloat(item.price_per_hour),
         price_per_day: item.price_per_day ? parseFloat(item.price_per_day) : undefined,
         image_url: item.image_url || '',
+        category: item.category || ItemCategory.OTHER,
         availabilities: item.availabilities.map(avail => ({
           date: avail.date,
           start_time: avail.start_time,
@@ -244,6 +247,20 @@ export default function EditItemPage() {
               />
             </div>
 
+            <Controller
+              name="category"
+              control={control}
+              render={({ field, fieldState }) => (
+                <CategorySelect
+                  value={field.value}
+                  onChange={(category) => {
+                    field.onChange(category)
+                  }}
+                  error={fieldState.error?.message}
+                />
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -306,17 +323,17 @@ export default function EditItemPage() {
                     disabled={uploading}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full flex items-center justify-center space-x-2 px-6 py-4 border-2 border-dashed border-primary-300 rounded-xl hover:border-primary-500 transition-all disabled:opacity-50 bg-primary-50 hover:bg-primary-100"
+                    className="w-full flex items-center justify-center space-x-2 px-6 py-4 border-2 border-dashed border-primary-300 dark:border-primary-600 rounded-xl hover:border-primary-500 dark:hover:border-primary-400 transition-all disabled:opacity-50 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30"
                   >
                     {uploading ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-950"></div>
-                        <span className="text-primary-950 font-medium">Загрузка...</span>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-950 dark:border-primary-400"></div>
+                        <span className="text-primary-950 dark:text-primary-300 font-medium">Загрузка...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="h-6 w-6 text-primary-950" />
-                        <span className="text-primary-950 font-medium">Загрузить изображение</span>
+                        <Upload className="h-6 w-6 text-primary-950 dark:text-primary-400" />
+                        <span className="text-primary-950 dark:text-primary-300 font-medium">Загрузить изображение</span>
                       </>
                     )}
                   </motion.button>

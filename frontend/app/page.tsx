@@ -2,20 +2,47 @@
 
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Search, Clock, MapPin, Image as ImageIcon } from 'lucide-react'
+import { Search, Clock, MapPin, Image as ImageIcon, Eye, ChevronDown } from 'lucide-react'
 import Navbar from '@/components/Navbar'
-import { itemsApi, Item } from '@/lib/items'
+import CategoryFilter from '@/components/CategoryFilter'
+import FavoriteButton from '@/components/FavoriteButton'
+import { itemsApi, Item, ItemCategory, ItemType } from '@/lib/items'
+import { getCategoryInfo } from '@/lib/categories'
 import { useLanguage } from '@/lib/i18n'
 
 export default function Home() {
   const { t, language } = useLanguage()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dormitory, setDormitory] = useState<number | undefined>(undefined)
+  
+  // Инициализируем категорию из URL при первой загрузке
+  const urlCategory = searchParams.get('category')
+  const isValidCategory = urlCategory && Object.values(ItemCategory).includes(urlCategory as ItemCategory)
+  const [category, setCategory] = useState<ItemCategory | undefined>(
+    isValidCategory ? (urlCategory as ItemCategory) : undefined
+  )
   const [minPrice, setMinPrice] = useState<number | undefined>(undefined)
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined)
+
+  // Обновляем URL при изменении категории
+  const handleCategoryChange = (newCategory: ItemCategory | undefined) => {
+    setCategory(newCategory)
+    const params = new URLSearchParams(searchParams.toString())
+    if (newCategory) {
+      params.set('category', newCategory)
+    } else {
+      params.delete('category')
+    }
+    const newUrl = params.toString() ? `/?${params.toString()}` : '/'
+    router.replace(newUrl, { scroll: false })
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -25,8 +52,8 @@ export default function Home() {
   }, [search])
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['items', debouncedSearch, dormitory, minPrice, maxPrice],
-    queryFn: () => itemsApi.getAll(debouncedSearch || undefined, dormitory, minPrice, maxPrice),
+    queryKey: ['items', debouncedSearch, dormitory, category, minPrice, maxPrice],
+    queryFn: () => itemsApi.getAll(debouncedSearch || undefined, dormitory, category, minPrice, maxPrice),
   })
 
   return (
@@ -73,53 +100,69 @@ export default function Home() {
               />
             </motion.div>
             
-            <div className="flex flex-wrap gap-4 items-center">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('home.dormitory')}
-                </label>
-                <select
-                  key={`dormitory-${language}`}
-                  value={dormitory || ''}
-                  onChange={(e) => setDormitory(e.target.value ? parseInt(e.target.value) : undefined)}
-                  className="input-field"
-                  defaultValue=""
-                >
-                  <option value="" disabled hidden></option>
-                  <option value="1">{language === 'ru' ? 'Общежитие №1' : 'Dormitory №1'}</option>
-                  <option value="2">{language === 'ru' ? 'Общежитие №2' : 'Dormitory №2'}</option>
-                  <option value="3">{language === 'ru' ? 'Общежитие №3' : 'Dormitory №3'}</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('home.priceFrom')}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={minPrice || ''}
-                  onChange={(e) => setMinPrice(e.target.value ? parseFloat(e.target.value) : undefined)}
-                  className="input-field w-32"
-                  placeholder="0"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('home.priceTo')}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={maxPrice || ''}
-                  onChange={(e) => setMaxPrice(e.target.value ? parseFloat(e.target.value) : undefined)}
-                  className="input-field w-32"
-                  placeholder="∞"
-                />
+            <div className="space-y-6">
+              {/* Фильтр категорий - визуальный выбор */}
+              <CategoryFilter
+                selectedCategory={category}
+                onCategoryChange={handleCategoryChange}
+              />
+
+              {/* Остальные фильтры */}
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('home.dormitory')}
+                  </label>
+                  <div className="relative select-wrapper">
+                    <select
+                      key={`dormitory-${language}`}
+                      value={dormitory || ''}
+                      onChange={(e) => {
+                        setDormitory(e.target.value ? parseInt(e.target.value) : undefined)
+                        // Убираем фокус после выбора, чтобы стрелка вернулась в исходное положение
+                        e.target.blur()
+                      }}
+                      className="input-field pr-10"
+                      defaultValue=""
+                    >
+                      <option value="">{t('home.dormitoryAll')}</option>
+                      <option value="1">{t('home.dormitory1')}</option>
+                      <option value="2">{t('home.dormitory2')}</option>
+                      <option value="3">{t('home.dormitory3')}</option>
+                    </select>
+                    <ChevronDown className="select-arrow absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600 dark:text-gray-400 pointer-events-none transition-transform duration-200" />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('home.priceFrom')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    value={minPrice || ''}
+                    onChange={(e) => setMinPrice(e.target.value ? parseFloat(e.target.value) : undefined)}
+                    className="input-field w-32"
+                    placeholder="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('home.priceTo')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    value={maxPrice || ''}
+                    onChange={(e) => setMaxPrice(e.target.value ? parseFloat(e.target.value) : undefined)}
+                    className="input-field w-32"
+                    placeholder="∞"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -146,7 +189,7 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((item, index) => (
-              <ItemCard key={item.id} item={item} index={index} />
+              <ItemCard key={item.id} item={item} index={index} onCategoryClick={handleCategoryChange} />
             ))}
           </div>
         )}
@@ -155,8 +198,9 @@ export default function Home() {
   )
 }
 
-function ItemCard({ item, index }: { item: Item; index: number }) {
+function ItemCard({ item, index, onCategoryClick }: { item: Item; index: number; onCategoryClick?: (category: ItemCategory) => void }) {
   const { t } = useLanguage()
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -166,22 +210,21 @@ function ItemCard({ item, index }: { item: Item; index: number }) {
     >
       <Link href={`/items/${item.id}`}>
         <div className="card cursor-pointer group overflow-hidden">
-          <div className="relative h-56 rounded-xl mb-4 overflow-hidden flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+          <div className="relative rounded-xl mb-4 overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center min-h-[224px]">
             {item.image_url ? (
               <motion.img
                 src={item.image_url}
                 alt={item.title}
-                className="w-full h-full object-contain item-image"
-                whileHover={{ scale: 1.05 }}
+                className="w-full h-auto max-h-[400px] object-contain"
+                whileHover={{ scale: 1.02 }}
                 transition={{ duration: 0.3 }}
                 loading="lazy"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-primary-400">
+              <div className="w-full min-h-[224px] flex items-center justify-center text-primary-400">
                 <ImageIcon className="h-16 w-16" />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           
           <div className="flex items-center justify-between mb-2">
@@ -203,25 +246,48 @@ function ItemCard({ item, index }: { item: Item; index: number }) {
           
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-3xl font-bold gradient-text">
-                {parseFloat(item.price_per_hour).toFixed(0)} ₽/час
-              </p>
-              {item.price_per_day && (
-                <p className="text-sm text-gray-500 mt-1">
-                  {parseFloat(item.price_per_day).toFixed(0)} ₽/день
+              {item.item_type === ItemType.SALE ? (
+                <p className="text-3xl font-bold gradient-text">
+                  {item.sale_price ? parseFloat(item.sale_price).toFixed(0) : '0'} ₽
                 </p>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold gradient-text">
+                    {item.price_per_hour ? parseFloat(item.price_per_hour).toFixed(0) : '0'} ₽/час
+                  </p>
+                  {item.price_per_day && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {parseFloat(item.price_per_day).toFixed(0)} ₽/день
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
           
-          <div className="pt-4 border-t border-gray-200 flex items-center justify-between text-sm">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <MapPin className="h-4 w-4 text-primary-950" />
-              <span>Комната {item.owner.room_number || 'не указана'}</span>
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+                <MapPin className="h-4 w-4 text-primary-950 dark:text-primary-400" />
+                <span>Комната {item.owner.room_number || 'не указана'}</span>
+              </div>
+              {item.item_type === ItemType.RENT && (
+                <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+                  <Clock className="h-4 w-4 text-primary-950 dark:text-primary-400" />
+                  <span>{item.availabilities.length} расписаний</span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center space-x-2 text-gray-600">
-              <Clock className="h-4 w-4 text-primary-950" />
-              <span>{item.availabilities.length} расписаний</span>
+            
+            {/* Статистика */}
+            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5" />
+                <span>{item.view_count || 0}</span>
+              </div>
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <FavoriteButton itemId={item.id} ownerId={item.owner_id} size="sm" variant="minimal" showCount />
+              </div>
             </div>
           </div>
         </div>

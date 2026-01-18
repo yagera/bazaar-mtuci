@@ -37,12 +37,14 @@ export default function AdminPage() {
     queryKey: ['admin', 'users', search, roleFilter],
     queryFn: () => adminApi.getAllUsers(search || undefined, roleFilter),
     enabled: !!currentUser && currentUser.role === UserRole.ADMIN,
+    refetchInterval: 30000, // Обновление каждые 30 секунд
   })
 
   const { data: stats } = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: () => adminApi.getStats(),
     enabled: !!currentUser && currentUser.role === UserRole.ADMIN,
+    refetchInterval: 15000, // Обновление каждые 15 секунд
   })
 
   const updateRoleMutation = useMutation({
@@ -122,7 +124,9 @@ export default function AdminPage() {
 
             <div className="flex flex-col md:flex-row gap-4 mb-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <div className="absolute left-3 top-0 bottom-0 flex items-center pointer-events-none">
+                  <Search className="text-gray-400 dark:text-gray-500 h-5 w-5" />
+                </div>
                 <input
                   type="text"
                   placeholder="Поиск по имени или email..."
@@ -216,5 +220,8 @@ export default function AdminPage() {
     </div>
   )
 }
+
+
+
 
 
