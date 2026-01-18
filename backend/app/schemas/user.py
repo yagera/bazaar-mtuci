@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional, Union
 from datetime import datetime
 from app.models.user import UserRole
 
@@ -11,6 +11,23 @@ class UserBase(BaseModel):
     room_number: Optional[str] = None
     dormitory: Optional[int] = None  # 1, 2, or 3
     telegram_username: Optional[str] = None
+    
+    @field_validator('dormitory', mode='before')
+    @classmethod
+    def validate_dormitory(cls, v):
+        if v is None or v == '':
+            return None
+        if isinstance(v, str):
+            try:
+                val = int(v)
+                if val not in [1, 2, 3]:
+                    return None
+                return val
+            except (ValueError, TypeError):
+                return None
+        if isinstance(v, int) and v not in [1, 2, 3]:
+            return None
+        return v
 
 
 class UserCreate(UserBase):

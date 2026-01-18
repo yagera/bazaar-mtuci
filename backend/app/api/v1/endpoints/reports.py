@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from app.core.database import get_db
 from app.models.user import User as UserModel, UserRole
-from app.models.item import Item as ItemModel
+from app.models.item import Item as ItemModel, ModerationStatus
 from app.models.report import Report as ReportModel, ReportStatus, ReportReason
 from app.schemas.report import ReportCreate, ReportUpdate, Report as ReportSchema, ReportInDB
 from app.api.v1.endpoints.auth import get_current_user
+from app.services.notification_service import create_item_removed_notification
 from datetime import datetime
 
 
@@ -71,7 +72,11 @@ def get_reports(
     current_user: UserModel = Depends(require_moderator),
     db: Session = Depends(get_db)
 ):
-    query = db.query(ReportModel)
+    query = db.query(ReportModel).options(
+        joinedload(ReportModel.item).joinedload(ItemModel.owner),
+        joinedload(ReportModel.reporter),
+        joinedload(ReportModel.reviewer)
+    )
     
     if status_filter:
         query = query.filter(ReportModel.status == status_filter)
@@ -85,7 +90,11 @@ def get_pending_reports(
     current_user: UserModel = Depends(require_moderator),
     db: Session = Depends(get_db)
 ):
-    reports = db.query(ReportModel).filter(
+    reports = db.query(ReportModel).options(
+        joinedload(ReportModel.item).joinedload(ItemModel.owner),
+        joinedload(ReportModel.reporter),
+        joinedload(ReportModel.reviewer)
+    ).filter(
         ReportModel.status == ReportStatus.PENDING
     ).order_by(ReportModel.created_at.desc()).all()
     return reports
@@ -97,7 +106,11 @@ def get_report(
     current_user: UserModel = Depends(require_moderator),
     db: Session = Depends(get_db)
 ):
-    report = db.query(ReportModel).filter(ReportModel.id == report_id).first()
+    report = db.query(ReportModel).options(
+        joinedload(ReportModel.item).joinedload(ItemModel.owner),
+        joinedload(ReportModel.reporter),
+        joinedload(ReportModel.reviewer)
+    ).filter(ReportModel.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Жалоба не найдена")
     return report
@@ -145,6 +158,21 @@ def resolve_report(
     if item:
         item.is_active = False
         item.moderation_status = ModerationStatus.REJECTED
+        
+        # Создаем уведомление владельцу объявления
+        try:
+            create_item_removed_notification(
+                db=db,
+                owner_id=item.owner_id,
+                item_id=item.id,
+                report_id=report.id,
+                item_title=item.title
+            )
+        except Exception as e:
+            # Логируем ошибку, но не прерываем выполнение
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Ошибка при создании уведомления: {str(e)}")
     
     db.commit()
     db.refresh(report)
@@ -192,5 +220,8 @@ def get_report_stats(
         "resolved": resolved_count,
         "dismissed": dismissed_count
     }
+
+
+
 
 

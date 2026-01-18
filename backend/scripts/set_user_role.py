@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SessionLocal
 from app.models.user import User, UserRole
+from app.models.item import Item
+from app.models.report import Report
 
 
 def set_user_role(username_or_email: str, role: str):
@@ -63,5 +65,7 @@ if __name__ == "__main__":
     
     success = set_user_role(username_or_email, role)
     sys.exit(0 if success else 1)
+
+
 
 

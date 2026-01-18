@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import datetime, timedelta, date, time, timezone
 from decimal import Decimal
@@ -10,6 +10,13 @@ from app.models.booking import Booking, BookingStatus
 from app.models.availability import Availability
 from app.schemas.booking import BookingCreate, BookingUpdate, Booking as BookingSchema, BookingPublic
 from app.api.v1.endpoints.auth import get_current_user
+from app.services.notification_service import (
+    create_new_booking_notification,
+    create_booking_confirmed_notification,
+    create_booking_rejected_notification,
+    create_booking_cancelled_by_owner_notification,
+    create_booking_cancelled_by_renter_notification,
+)
 
 router = APIRouter()
 
@@ -21,8 +28,10 @@ def calculate_price(item: ItemModel, start_time: datetime, end_time: datetime) -
     if item.price_per_day and hours >= 24:
         days = hours / 24
         return Decimal(str(days)) * item.price_per_day
-    else:
+    elif item.price_per_hour:
         return Decimal(str(hours)) * item.price_per_hour
+    else:
+        raise ValueError("Item must have either price_per_hour or price_per_day")
 
 
 def check_availability(item_id: int, start_time: datetime, end_time: datetime, db: Session, exclude_booking_id: int = None) -> dict:
@@ -37,11 +46,12 @@ def check_availability(item_id: int, start_time: datetime, end_time: datetime, d
     
     overlapping = query.first()
     if overlapping:
-        overlap_start = overlapping.start_time.strftime("%H:%M")
-        overlap_end = overlapping.end_time.strftime("%H:%M")
+        overlap_start_date = overlapping.start_time.strftime("%d.%m.%Y")
+        overlap_start_time = overlapping.start_time.strftime("%H:%M")
+        overlap_end_time = overlapping.end_time.strftime("%H:%M")
         return {
             "available": False,
-            "message": f"Это время уже занято. Занято с {overlap_start} до {overlap_end}"
+            "message": f"Это время уже занято. Занято {overlap_start_date} с {overlap_start_time} до {overlap_end_time}"
         }
     
     booking_start_date = start_time.date()
@@ -154,6 +164,24 @@ def create_booking(
     db.add(db_booking)
     db.commit()
     db.refresh(db_booking)
+    
+    # Создаем уведомление владельцу о новом бронировании
+    try:
+        create_new_booking_notification(
+            db=db,
+            owner_id=item.owner_id,
+            booking_id=db_booking.id,
+            item_id=item.id,
+            item_title=item.title,
+            renter_username=current_user.username
+        )
+        db.commit()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Ошибка при создании уведомления о новом бронировании: {str(e)}")
+        db.rollback()
+    
     return db_booking
 
 
@@ -211,21 +239,94 @@ def update_booking(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = db.query(Booking).options(joinedload(Booking.item), joinedload(Booking.renter)).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
-    item = db.query(ItemModel).filter(ItemModel.id == booking.item_id).first()
+    item = booking.item
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
     
-    if item.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only item owner can update booking status")
+    # Проверяем права доступа
+    is_owner = item.owner_id == current_user.id
+    is_renter = booking.renter_id == current_user.id
     
+    if not is_owner and not is_renter:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    old_status = booking.status
+    
+    # Валидация статуса
     if booking_update.status:
         try:
-            booking.status = BookingStatus(booking_update.status)
+            new_status = BookingStatus(booking_update.status)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid status")
+        
+        # Владелец может подтверждать, отклонять или отменять
+        # Арендатор может только отменять свои бронирования
+        if is_renter and not is_owner:
+            if new_status != BookingStatus.CANCELLED:
+                raise HTTPException(status_code=403, detail="Renter can only cancel bookings")
+            if old_status == BookingStatus.COMPLETED:
+                raise HTTPException(status_code=400, detail="Cannot cancel completed booking")
+        
+        booking.status = new_status
     
     db.commit()
+    
+    # Создаем уведомления при изменении статуса бронирования
+    if booking_update.status and old_status != booking.status:
+        try:
+            renter = booking.renter
+            
+            if booking.status == BookingStatus.CONFIRMED:
+                # Владелец подтвердил бронирование
+                create_booking_confirmed_notification(
+                    db=db,
+                    renter_id=booking.renter_id,
+                    booking_id=booking.id,
+                    item_id=item.id,
+                    item_title=item.title
+                )
+            elif booking.status == BookingStatus.CANCELLED:
+                if is_renter and not is_owner:
+                    # Арендатор отменил бронирование
+                    create_booking_cancelled_by_renter_notification(
+                        db=db,
+                        owner_id=item.owner_id,
+                        booking_id=booking.id,
+                        item_id=item.id,
+                        item_title=item.title,
+                        renter_username=renter.username
+                    )
+                elif is_owner:
+                    # Владелец отменил бронирование
+                    if old_status == BookingStatus.PENDING:
+                        # Если владелец отменяет pending бронирование, это считается отклонением
+                        create_booking_rejected_notification(
+                            db=db,
+                            renter_id=booking.renter_id,
+                            booking_id=booking.id,
+                            item_id=item.id,
+                            item_title=item.title
+                        )
+                    elif old_status == BookingStatus.CONFIRMED:
+                        # Если владелец отменяет подтвержденное бронирование
+                        create_booking_cancelled_by_owner_notification(
+                            db=db,
+                            renter_id=booking.renter_id,
+                            booking_id=booking.id,
+                            item_id=item.id,
+                            item_title=item.title
+                        )
+            
+            db.commit()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Ошибка при создании уведомления об изменении статуса бронирования: {str(e)}")
+            db.rollback()
+    
     db.refresh(booking)
     return booking

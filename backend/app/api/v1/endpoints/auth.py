@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -10,6 +11,22 @@ from app.schemas.user import UserCreate, User as UserSchema, Token
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)) -> Optional[UserModel]:
+    """Получить текущего пользователя, если он авторизован. Возвращает None, если не авторизован."""
+    if token is None:
+        return None
+    from app.core.security import decode_access_token
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+    username: str = payload.get("sub")
+    if username is None:
+        return None
+    user = db.query(UserModel).filter(UserModel.username == username).first()
+    return user
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserModel:
@@ -131,11 +148,19 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_user)
         return db_user
+    except HTTPException:
+        # Пробрасываем HTTPException без изменений
+        db.rollback()
+        raise
     except Exception as e:
+        # Логируем все остальные исключения
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error creating user: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при создании пользователя: {str(e)}"
+            detail="Ошибка при создании пользователя. Пожалуйста, попробуйте позже."
         )
 
 

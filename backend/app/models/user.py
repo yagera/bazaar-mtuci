@@ -28,7 +28,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    items = relationship("Item", back_populates="owner", cascade="all, delete-orphan")
+    items = relationship("Item", back_populates="owner", cascade="all, delete-orphan", foreign_keys="Item.owner_id")
     bookings = relationship("Booking", back_populates="renter", foreign_keys="Booking.renter_id")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
 
 

@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_S3_BUCKET: Optional[str] = None
     AWS_S3_ENDPOINT_URL: Optional[str] = None
+    
+    # AI Moderation settings
+    AI_MODERATION_ENABLED: bool = False
+    AI_MODERATION_MODEL_DIR: Optional[str] = None  # Path to model directory, e.g., "/home/gera/clip"
+    AI_MODERATION_MODEL_NAME: str = "openai/clip-vit-base-patch32"
+    AI_MODERATION_DEVICE: Optional[str] = None  # "cuda" or "cpu", auto-detects if None
+    AI_MODERATION_MIN_CONFIDENCE_REJECT: float = 0.7
+    AI_MODERATION_AUTO_APPROVE_CONFIDENCE: float = 0.85
+    AI_MODERATION_AUTO_REJECT_CONFIDENCE: float = 0.90
 
     class Config:
         env_file = ".env"
