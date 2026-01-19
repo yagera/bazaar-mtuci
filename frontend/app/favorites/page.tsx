@@ -8,7 +8,6 @@ import Navbar from '@/components/Navbar'
 import FavoriteButton from '@/components/FavoriteButton'
 import { favoritesApi } from '@/lib/favorites'
 import { Item, ItemType } from '@/lib/items'
-import { getCategoryInfo } from '@/lib/categories'
 
 export default function FavoritesPage() {
   const { data: items = [], isLoading } = useQuery({
@@ -83,8 +82,6 @@ export default function FavoritesPage() {
 }
 
 function FavoriteItemCard({ item, index }: { item: Item; index: number }) {
-  const categoryInfo = getCategoryInfo(item.category)
-  const CategoryIcon = categoryInfo.icon
 
   return (
     <motion.div
@@ -114,14 +111,6 @@ function FavoriteItemCard({ item, index }: { item: Item; index: number }) {
             {/* Кнопка избранного */}
             <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
               <FavoriteButton itemId={item.id} ownerId={item.owner_id} size="sm" variant="minimal" />
-            </div>
-            
-            {/* Категория */}
-            <div className={`absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${categoryInfo.bgColor} border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-md shadow-sm z-10`}>
-              <CategoryIcon className={`h-3.5 w-3.5 ${categoryInfo.color}`} />
-              <span className={`text-xs font-semibold ${categoryInfo.color} hidden sm:inline`}>
-                {categoryInfo.label}
-              </span>
             </div>
           </div>
           

@@ -707,7 +707,7 @@ function ModerationStatsDashboard({ stats }: { stats: ModerationDetailedStats })
       </div>
 
       {/* Статистика для админов */}
-      {stats.admin && (
+      {stats.admin && stats.admin.users && stats.admin.bookings && stats.admin.items && (
         <div className="card">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
