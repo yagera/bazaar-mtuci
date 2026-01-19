@@ -327,10 +327,6 @@ python scripts/set_user_role.py <username> <role>
 
 MIT License
 
-## 👥 Авторы
-
-Разработано для общежития МТУСИ
-
 ---
 
 <div align="center">
