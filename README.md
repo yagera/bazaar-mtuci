@@ -1,9 +1,7 @@
 <div align="center">
 
 # 🏪 Bazaar MTUCI
-<img width="2489" height="1445" alt="image" src="https://github.com/user-attachments/assets/a8aa5922-8062-4167-9452-080234aec6e2" />
-
-**Платформа для аренды вещей в общежитии МТУСИ**
+**Платформа для аренды и продажи вещей в общежитии МТУСИ**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -11,6 +9,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
+<img width="2489" height="1445" alt="image" src="https://github.com/user-attachments/assets/a8aa5922-8062-4167-9452-080234aec6e2" />
 </div>
 
 ## 📋 О проекте
