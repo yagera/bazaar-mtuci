@@ -1,6 +1,7 @@
 <div align="center">
 
 # 🏪 Bazaar MTUCI
+<img width="2489" height="1445" alt="image" src="https://github.com/user-attachments/assets/a8aa5922-8062-4167-9452-080234aec6e2" />
 
 **Платформа для аренды вещей в общежитии МТУСИ**
 
